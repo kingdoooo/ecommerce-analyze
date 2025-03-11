@@ -1,556 +1,618 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import pymysql
 import random
-from faker import Faker
-from datetime import datetime, timedelta
-import time
 import argparse
+import decimal
+from datetime import datetime, timedelta
+from faker import Faker
 
-# 初始化Faker生成器
-fake = Faker()
+# 初始化Faker
+fake = Faker('zh_CN')
 
-def create_database(conn_params):
-    """创建数据库"""
-    # 连接到MySQL服务器(不指定数据库)
-    conn = pymysql.connect(
-        host=conn_params['host'],
-        user=conn_params['user'],
-        password=conn_params['password']
-    )
-    
-    cursor = conn.cursor()
-    
-    try:
-        # 创建数据库
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {conn_params['database']}")
-        print(f"数据库 {conn_params['database']} 创建成功或已存在")
-    except Exception as e:
-        print(f"创建数据库时出错: {e}")
-    finally:
-        cursor.close()
-        conn.close()
+# 解析命令行参数
+parser = argparse.ArgumentParser(description='生成电商模拟数据')
+parser.add_argument('--host', default='localhost', help='数据库主机地址')
+parser.add_argument('--user', default='root', help='数据库用户名')
+parser.add_argument('--password', default='', help='数据库密码')
+parser.add_argument('--database', default='ecommerce', help='数据库名称')
+args = parser.parse_args()
 
-def connect_to_db(conn_params):
-    """连接到指定数据库"""
-    return pymysql.connect(
-        host=conn_params['host'],
-        user=conn_params['user'],
-        password=conn_params['password'],
-        db=conn_params['database']
-    )
+# 数据库连接参数
+db_config = {
+    'host': args.host,
+    'user': args.user,
+    'password': args.password,
+    'charset': 'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor
+}
 
-def generate_product_categories(conn):
-    """生成商品分类数据"""
-    cursor = conn.cursor()
-    
-    # 清除已有数据
-    cursor.execute("DELETE FROM product_categories")
-    
-    categories = [
-        (1, "泳装", None, 1, True),
-        (11, "女士泳衣", 1, 2, True),
-        (12, "男士泳裤", 1, 2, True),
-        (13, "儿童泳衣", 1, 2, True),
-        (14, "比基尼", 1, 2, True),
-        (15, "沙滩配件", 1, 2, True),
-        
-        (2, "成衣", None, 1, True),
-        (21, "女士上装", 2, 2, True),
-        (22, "女士下装", 2, 2, True),
-        (23, "男士上装", 2, 2, True),
-        (24, "男士下装", 2, 2, True),
-        
-        (3, "配饰", None, 1, True),
-        (31, "项链", 3, 2, True),
-        (32, "手链", 3, 2, True),
-        (33, "耳环", 3, 2, True),
-        
-        (4, "帽子", None, 1, True),
-        (41, "棒球帽", 4, 2, True),
-        (42, "太阳帽", 4, 2, True),
-        (43, "沙滩帽", 4, 2, True),
-        
-        (5, "包袋", None, 1, True),
-        (51, "手提包", 5, 2, True),
-        (52, "沙滩包", 5, 2, True),
-        (53, "背包", 5, 2, True)
-    ]
-    
-    for category in categories:
-        cursor.execute("""
-        INSERT INTO product_categories (category_id, category_name, parent_category_id, category_level, is_active)
-        VALUES (%s, %s, %s, %s, %s)
-        """, category)
-    
-    conn.commit()
-    print(f"已插入 {len(categories)} 个产品类别")
-
-def generate_products(conn):
-    """生成商品数据"""
-    cursor = conn.cursor()
-    
-    # 清除已有数据
-    cursor.execute("DELETE FROM products")
-    
-    brands = ["OceanBreeze", "SunnyDays", "WaveRider", "BeachLife", "TropicalVibes", "CoastalChic"]
-    suppliers = ["SeaFashion Inc.", "BeachGear Supply", "Aquatic Styles", "Summer Collections Ltd", "Coastal Manufacturers"]
-    
-    # 产品名称模板
-    product_templates = {
-        11: ["女式连体泳衣", "流行女士泳衣", "修身女士泳衣", "性感露背泳衣"],
-        12: ["男士沙滩短裤", "男士游泳短裤", "快干泳裤", "时尚男士泳裤"],
-        13: ["儿童可爱泳衣", "防晒儿童泳装", "卡通儿童泳衣"],
-        14: ["时尚比基尼套装", "性感分体泳衣", "热带风情比基尼"],
-        15: ["防水沙滩包", "防晒沙滩巾", "沙滩拖鞋"],
-        21: ["女士T恤", "女士衬衫", "女士背心"],
-        22: ["女士短裤", "女士牛仔裤", "女士裙装"],
-        23: ["男士T恤", "男士衬衫", "男士背心"],
-        24: ["男士短裤", "男士牛仔裤", "男士休闲裤"],
-        31: ["波西米亚项链", "简约风项链", "贝壳项链"],
-        32: ["手工串珠手链", "银质手链", "编织手链"],
-        33: ["贝壳耳环", "波西米亚耳环", "简约耳钉"],
-        41: ["标志棒球帽", "复古棒球帽"],
-        42: ["宽边太阳帽", "折叠太阳帽"],
-        43: ["草编沙滩帽", "防晒沙滩帽"],
-        51: ["手提购物包", "编织手提包"],
-        52: ["防水沙滩包", "网眼沙滩包"],
-        53: ["轻便背包", "防水背包"]
-    }
-    
-    products = []
-    product_id = 1
-    
-    # 生成产品数据，泳装类别占70%的产品
-    for category_id in product_templates:
-        # 确定每个类别产品数量
-        if category_id in [11, 12, 13, 14, 15]:  # 泳装类别
-            count = random.randint(20, 30)
-        elif category_id in [21, 22, 23, 24]:  # 成衣类别
-            count = random.randint(8, 15)
-        else:  # 其他类别
-            count = random.randint(5, 10)
-        
-        for _ in range(count):
-            template = random.choice(product_templates[category_id])
-            color = random.choice(["红色", "蓝色", "黑色", "白色", "粉色", "绿色", "黄色", "紫色"])
-            size = random.choice(["S", "M", "L", "XL"]) if category_id not in [31, 32, 33] else ""
-            
-            product_name = f"{template} {color}" + (f" {size}" if size else "")
-            brand = random.choice(brands)
-            supplier = random.choice(suppliers)
-            
-            # 价格设置在5-50美元之间，成本为售价的60%左右
-            if category_id in [11, 12, 13, 14]:  # 泳装主要产品
-                current_price = round(random.uniform(20, 50), 2)
-            elif category_id in [31, 32, 33]:  # 配饰
-                current_price = round(random.uniform(5, 15), 2)
-            else:  # 其他产品
-                current_price = round(random.uniform(10, 40), 2)
-                
-            original_price = round(current_price * random.uniform(1, 1.2), 2)
-            cost = round(current_price * random.uniform(0.55, 0.65), 2)
-            
-            stock = random.randint(50, 500)
-            create_date = (datetime.now() - timedelta(days=random.randint(180, 720))).strftime('%Y-%m-%d')
-            
-            products.append((
-                product_id, 
-                product_name, 
-                category_id, 
-                brand, 
-                supplier,
-                original_price, 
-                current_price, 
-                cost, 
-                stock, 
-                create_date, 
-                True
-            ))
-            
-            product_id += 1
-    
-    for product in products:
-        cursor.execute("""
-        INSERT INTO products (product_id, product_name, category_id, brand, supplier, original_price, 
-                             current_price, cost, stock_quantity, create_time, is_active)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, product)
-    
-    conn.commit()
-    print(f"已插入 {len(products)} 个产品")
-    return product_id - 1  # 返回最大产品ID用于后续引用
-
-def generate_users(conn, count=3000):
-    """生成用户数据"""
-    cursor = conn.cursor()
-    
-    # 清除已有数据
-    cursor.execute("DELETE FROM users")
-    
-    users = []
-    
-    # 国家分布：美国70%，其他国家共30%
-    countries = {
-        "United States": 0.7,
-        "Canada": 0.1,
-        "United Kingdom": 0.1,
-        "France": 0.05,
-        "Australia": 0.05
-    }
-    
-    # 用户来源
-    sources = ["Organic Search", "Direct", "Social Media", "Referral", "Email Campaign"]
-    
-    for user_id in range(1, count+1):
-        # 选择国家，根据权重
-        country = random.choices(list(countries.keys()), weights=list(countries.values()))[0]
-        
-        # 创建注册日期 - 分布在过去两年时间
-        reg_days_ago = random.randint(1, 730)
-        reg_date = (datetime.now() - timedelta(days=reg_days_ago)).strftime('%Y-%m-%d')
-        
-        # 用户等级
-        days_since_reg = (datetime.now() - datetime.strptime(reg_date, '%Y-%m-%d')).days
-        purchases = max(0, int(days_since_reg / 60) + random.randint(-2, 2))  # 大致每60天购买一次
-        
-        if purchases >= 10:
-            user_level = "VIP"
-        elif purchases >= 5:
-            user_level = "Gold"
-        elif purchases >= 2:
-            user_level = "Silver"
-        else:
-            user_level = "Bronze"
-            
-        user = (
-            user_id,
-            fake.user_name(),
-            fake.email(),
-            fake.phone_number(),
-            random.choice(["Male", "Female"]),
-            random.randint(18, 65),
-            fake.city(),
-            country,
-            reg_date,
-            user_level,
-            random.random() > 0.1,  # 90%是活跃用户
-            random.choice(sources)
-        )
-        
-        users.append(user)
-    
-    for user in users:
-        cursor.execute("""
-        INSERT INTO users (user_id, username, email, phone, gender, age, city, country, registration_date, 
-                          user_level, is_active, user_source)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, user)
-    
-    conn.commit()
-    print(f"已插入 {count} 个用户")
-
-def generate_marketing_campaigns(conn):
-    """生成营销活动数据"""
-    cursor = conn.cursor()
-    
-    # 清除已有数据
-    cursor.execute("DELETE FROM marketing_campaigns")
-    
-    campaigns = [
-        (1, "新年特惠", "Discount", "2023-01-01", "2023-01-15", 5000.00, "All Users", "Percentage", 20.00, False),
-        (2, "春季泳装上新", "New Arrival", "2023-03-01", "2023-03-31", 8000.00, "Female Users", "Percentage", 10.00, False),
-        (3, "夏日狂欢", "Holiday", "2023-06-01", "2023-06-30", 10000.00, "All Users", "Percentage", 15.00, False),
-        (4, "返校季促销", "Back to School", "2023-08-15", "2023-09-15", 6000.00, "Students", "Fixed", 5.00, False),
-        (5, "黑色星期五", "Holiday", "2023-11-24", "2023-11-28", 15000.00, "All Users", "Percentage", 30.00, False),
-        (6, "圣诞特惠", "Holiday", "2023-12-15", "2023-12-25", 12000.00, "All Users", "Percentage", 25.00, True),
-        (7, "会员专享", "Membership", "2023-01-01", "2023-12-31", 5000.00, "VIP & Gold Members", "Percentage", 10.00, True),
-        (8, "首单立减", "New Customer", "2023-01-01", "2023-12-31", 3000.00, "New Users", "Fixed", 5.00, True)
-    ]
-    
-    for campaign in campaigns:
-        cursor.execute("""
-        INSERT INTO marketing_campaigns (campaign_id, campaign_name, campaign_type, start_date, end_date, 
-                                        budget, target_audience, discount_type, discount_value, is_active)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, campaign)
-    
-    conn.commit()
-    print(f"已插入 {len(campaigns)} 个营销活动")
-
-def generate_traffic_sources(conn):
-    """生成流量来源数据"""
-    cursor = conn.cursor()
-    
-    # 清除已有数据
-    cursor.execute("DELETE FROM traffic_sources")
-    
-    sources = [
-        (1, "Direct", "Direct", None),
-        (2, "Google Organic", "Search", None),
-        (3, "Bing Organic", "Search", None),
-        (4, "Facebook", "Social", None),
-        (5, "Instagram", "Social", None),
-        (6, "Twitter", "Social", None),
-        (7, "Pinterest", "Social", None),
-        (8, "Email Newsletter", "Email", None),
-        (9, "Affiliate", "Referral", None),
-        (10, "New Year Campaign", "Paid", 1),
-        (11, "Spring Collection", "Paid", 2),
-        (12, "Summer Sale", "Paid", 3),
-        (13, "Back to School", "Paid", 4),
-        (14, "Black Friday", "Paid", 5),
-        (15, "Christmas Sale", "Paid", 6)
-    ]
-    
-    for source in sources:
-        cursor.execute("""
-        INSERT INTO traffic_sources (source_id, source_name, source_type, campaign_id)
-        VALUES (%s, %s, %s, %s)
-        """, source)
-    
-    conn.commit()
-    print(f"已插入 {len(sources)} 个流量来源")
-
-def get_month_multiplier(month):
-    """
-    根据月份返回销售量倍数，实现季节性趋势:
-    1月开始逐步增长，7月达到高峰，之后开始下降
-    """
-    # 季节性趋势系数
-    seasonal_trend = {
-        1: 0.8,  # 1月，开始上升
-        2: 0.9,
-        3: 1.0, 
-        4: 1.2,
-        5: 1.4,
-        6: 1.6,
-        7: 1.8,  # 7月高峰
-        8: 1.6,
-        9: 1.4,
-        10: 1.2,
-        11: 1.0,
-        12: 1.1  # 假日季节略有提升
-    }
-    
-    return seasonal_trend.get(month, 1.0)
-
-def generate_orders_and_items(conn, max_product_id):
-    """生成订单和订单项数据"""
-    cursor = conn.cursor()
-    
-    # 清除已有数据
-    cursor.execute("DELETE FROM order_items")
-    cursor.execute("DELETE FROM orders")
-    cursor.execute("DELETE FROM order_campaign_map")
-    
-    # 订单来源
-    order_sources = {
-        "Own Website": 0.50,
-        "Amazon": 0.40,
-        "Other Marketplaces": 0.10
-    }
-    
-    # 支付方式
-    payment_methods = ["Credit Card", "PayPal", "Apple Pay", "Google Pay", "Amazon Pay"]
-    
-    # 设备类型
-    device_types = ["Desktop", "Mobile", "Tablet"]
-    
-    # 订单状态
-    order_statuses = ["Completed", "Shipped", "Processing", "Cancelled"]
-    status_weights = [0.85, 0.08, 0.05, 0.02]
-    
-    # 获取所有有效活动
-    cursor.execute("SELECT campaign_id, start_date, end_date, discount_type, discount_value FROM marketing_campaigns")
-    campaigns = {row[0]: {"start": row[1], "end": row[2], "type": row[3], "value": row[4]} for row in cursor.fetchall()}
-    
-    # 生成2023年的订单
-    start_date = datetime(2023, 1, 1)
-    end_date = datetime(2023, 12, 31)
-    
-    order_id = 1
-    order_item_id = 1
-    map_id = 1
-    
-    # 订单数量将根据月份有所不同
-    base_daily_orders = 50  # 基础日均订单量
-    
-    current_date = start_date
-    while current_date <= end_date:
-        # 根据月份调整订单数量
-        month_multiplier = get_month_multiplier(current_date.month)
-        daily_orders = int(base_daily_orders * month_multiplier)
-        
-        # 添加一些随机波动
-        daily_orders = int(daily_orders * random.uniform(0.8, 1.2))
-        
-        # 周末订单更多
-        if current_date.weekday() >= 5:  # 5,6是周六日
-            daily_orders = int(daily_orders * 1.3)
-        
-        # 特殊节日
-        if (current_date.month == 11 and current_date.day >= 24 and current_date.day <= 28) or \
-           (current_date.month == 12 and current_date.day >= 15 and current_date.day <= 25):
-            daily_orders = int(daily_orders * 1.5)  # 黑五和圣诞季节
-            
-        # 生成当天订单
-        for _ in range(daily_orders):
-            user_id = random.randint(1, 3000)
-            order_hour = random.randint(0, 23)
-            order_minute = random.randint(0, 59)
-            order_second = random.randint(0, 59)
-            order_datetime = datetime(current_date.year, current_date.month, current_date.day, 
-                                    order_hour, order_minute, order_second)
-            
-            # 选择订单来源
-            order_source = random.choices(list(order_sources.keys()), weights=list(order_sources.values()))[0]
-            
-            # 随机选择支付和设备
-            payment_method = random.choice(payment_methods)
-            device_type = random.choice(device_types)
-            
-            # 随机选择订单状态
-            order_status = random.choices(order_statuses, weights=status_weights)[0]
-            
-            # 订单金额初始化
-            total_amount = 0.0
-            discount_amount = 0.0
-            
-            # 查看是否有活动
-            applicable_campaigns = []
-            for camp_id, camp_data in campaigns.items():
-                if camp_data["start"] <= order_datetime.date() <= camp_data["end"]:
-                    applicable_campaigns.append(camp_id)
-            
-            # 创建订单
-            cursor.execute("""
-            INSERT INTO orders (order_id, user_id, order_date, total_amount, discount_amount, 
-                              payment_method, payment_status, shipping_address, order_status, order_source, device_type)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                order_id, 
-                user_id, 
-                order_datetime,
-                0,  # 临时设为0，后面更新
-                0,  # 临时设为0，后面更新
-                payment_method,
-                "Paid" if order_status != "Cancelled" else "Refunded",
-                fake.address().replace('\n', ', '),
-                order_status,
-                order_source,
-                device_type
-            ))
-            
-            # 决定订单项数量
-            items_count = random.choices([1, 2, 3, 4], weights=[0.6, 0.25, 0.1, 0.05])[0]
-            
-            # 创建订单项
-            selected_products = random.sample(range(1, max_product_id+1), items_count)
-            for product_id in selected_products:
-                # 获取产品信息
-                cursor.execute("SELECT current_price FROM products WHERE product_id = %s", (product_id,))
-                product = cursor.fetchone()
-                
-                if product:
-                    unit_price = product[0]
-                    quantity = random.randint(1, 3)
-                    item_discount = 0
-                    
-                    # 计算折扣
-                    if applicable_campaigns and random.random() < 0.7:  # 70%的订单应用活动
-                        campaign_id = random.choice(applicable_campaigns)
-                        camp_data = campaigns[campaign_id]
-                        
-                        # 记录订单与活动的关联
-                        cursor.execute("""
-                        INSERT INTO order_campaign_map (id, order_id, campaign_id)
-                        VALUES (%s, %s, %s)
-                        """, (map_id, order_id, campaign_id))
-                        map_id += 1
-                        
-                        # 计算折扣金额
-                        if camp_data["type"] == "Percentage":
-                            item_discount = round((unit_price * quantity) * (camp_data["value"] / 100), 2)
-                        else:  # Fixed
-                            item_discount = min(camp_data["value"], unit_price * quantity)
-                        
-                        discount_amount += item_discount
-                    
-                    # 添加订单项
-                    cursor.execute("""
-                    INSERT INTO order_items (order_item_id, order_id, product_id, quantity, unit_price, discount)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (
-                        order_item_id,
-                        order_id,
-                        product_id,
-                        quantity,
-                        unit_price,
-                        item_discount
-                    ))
-                    
-                    total_amount += unit_price * quantity
-                    order_item_id += 1
-            
-            # 更新订单总金额
-            cursor.execute("""
-            UPDATE orders SET total_amount = %s, discount_amount = %s WHERE order_id = %s
-            """, (total_amount, discount_amount, order_id))
-            
-            order_id += 1
-        
-        # 进入下一天
-        current_date += timedelta(days=1)
-        
-        # 每处理50天提交一次，减少内存压力
-        if current_date.day % 50 == 0:
-            conn.commit()
-            print(f"已处理到 {current_date.strftime('%Y-%m-%d')}")
-    
-    conn.commit()
-    print(f"已插入 {order_id-1} 个订单和 {order_item_id-1} 个订单项")
-
-def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description='生成电商模拟数据')
-    parser.add_argument('--host', default='localhost', help='数据库主机地址')
-    parser.add_argument('--user', default='root', help='数据库用户名')
-    parser.add_argument('--password', required=True, help='数据库密码')
-    parser.add_argument('--database', default='ecommerce', help='数据库名称')
-    
-    args = parser.parse_args()
-    
-    conn_params = {
-        'host': args.host,
-        'user': args.user,
-        'password': args.password,
-        'database': args.database
-    }
-    
+# 连接到MySQL
+try:
     print("开始执行电商数据模拟...")
     
-    try:
-        # 创建数据库
-        create_database(conn_params)
+    # 创建数据库（如果不存在）
+    connection = pymysql.connect(
+        host=db_config['host'],
+        user=db_config['user'],
+        password=db_config['password'],
+        charset=db_config['charset'],
+        cursorclass=db_config['cursorclass']
+    )
+    
+    with connection.cursor() as cursor:
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {args.database}")
+        print(f"数据库 {args.database} 创建成功或已存在")
+    
+    connection.close()
+    
+    # 连接到指定数据库
+    db_config['db'] = args.database
+    connection = pymysql.connect(**db_config)
+    print("成功连接到数据库")
+    
+    # 创建表结构（如果不存在）
+    with connection.cursor() as cursor:
+        # 创建产品类别表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS product_categories (
+            category_id INT AUTO_INCREMENT PRIMARY KEY,
+            category_name VARCHAR(100) NOT NULL,
+            category_level INT NOT NULL,
+            parent_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+        """)
         
-        # 连接到数据库
-        conn = connect_to_db(conn_params)
-        print("成功连接到数据库")
+        # 创建产品表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            product_id INT AUTO_INCREMENT PRIMARY KEY,
+            product_name VARCHAR(200) NOT NULL,
+            category_id INT NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            cost DECIMAL(10, 2) NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (category_id) REFERENCES product_categories(category_id)
+        )
+        """)
         
-        # 生成模拟数据
-        generate_product_categories(conn)
-        max_product_id = generate_products(conn)
-        generate_users(conn, 3000)
-        generate_marketing_campaigns(conn)
-        generate_traffic_sources(conn)
-        generate_orders_and_items(conn, max_product_id)
+        # 创建用户表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(50) NOT NULL,
+            email VARCHAR(100) NOT NULL,
+            registration_date DATE NOT NULL,
+            last_login_date DATE,
+            user_source VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+        """)
         
-        print("数据模拟完成!")
-    except Exception as e:
-        print(f"发生错误: {e}")
-    finally:
-        if 'conn' in locals():
-            conn.close()
-            print("数据库连接已关闭")
+        # 创建订单表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            order_id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            order_date DATETIME NOT NULL,
+            order_status VARCHAR(20) NOT NULL,
+            payment_method VARCHAR(50),
+            order_source VARCHAR(50),
+            campaign_id INT,
+            total_amount DECIMAL(10, 2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+        """)
+        
+        # 创建订单明细表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS order_items (
+            item_id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            product_id INT NOT NULL,
+            quantity INT NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            discount DECIMAL(10, 2) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (order_id) REFERENCES orders(order_id),
+            FOREIGN KEY (product_id) REFERENCES products(product_id)
+        )
+        """)
+        
+        # 创建营销活动表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS marketing_campaigns (
+            campaign_id INT AUTO_INCREMENT PRIMARY KEY,
+            campaign_name VARCHAR(100) NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            budget DECIMAL(10, 2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+        """)
+        
+        # 创建流量来源表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS traffic_sources (
+            source_id INT AUTO_INCREMENT PRIMARY KEY,
+            source_name VARCHAR(50) NOT NULL,
+            source_type VARCHAR(20) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+        """)
+        
+        # 创建用户行为表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_behaviors (
+            behavior_id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            product_id INT,
+            behavior_type VARCHAR(20) NOT NULL,
+            behavior_date DATETIME NOT NULL,
+            source_id INT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (product_id) REFERENCES products(product_id),
+            FOREIGN KEY (source_id) REFERENCES traffic_sources(source_id)
+        )
+        """)
+    
+    # 生成产品类别数据
+    categories = [
+        # 一级类别
+        {"name": "女装", "level": 1, "parent_id": None},
+        {"name": "男装", "level": 1, "parent_id": None},
+        {"name": "鞋靴", "level": 1, "parent_id": None},
+        {"name": "箱包", "level": 1, "parent_id": None},
+        {"name": "配饰", "level": 1, "parent_id": None},
+        {"name": "美妆", "level": 1, "parent_id": None},
+        {"name": "家居", "level": 1, "parent_id": None},
+    ]
+    
+    # 二级类别
+    subcategories = {
+        "女装": ["连衣裙", "T恤", "衬衫", "裤子", "外套"],
+        "男装": ["T恤", "衬衫", "裤子", "外套"],
+        "鞋靴": ["女鞋", "男鞋", "运动鞋", "靴子"],
+        "箱包": ["女包", "男包", "旅行箱"],
+        "配饰": ["首饰", "手表", "眼镜", "帽子"],
+        "美妆": ["护肤", "彩妆", "香水"],
+        "家居": ["床品", "家具", "装饰品"]
+    }
+    
+    with connection.cursor() as cursor:
+        # 插入一级类别
+        category_id_map = {}
+        for category in categories:
+            cursor.execute(
+                "INSERT INTO product_categories (category_name, category_level, parent_id) VALUES (%s, %s, %s)",
+                (category["name"], category["level"], category["parent_id"])
+            )
+            category_id_map[category["name"]] = cursor.lastrowid
+        
+        # 插入二级类别
+        for parent_name, subcats in subcategories.items():
+            parent_id = category_id_map[parent_name]
+            for subcat in subcats:
+                cursor.execute(
+                    "INSERT INTO product_categories (category_name, category_level, parent_id) VALUES (%s, %s, %s)",
+                    (subcat, 2, parent_id)
+                )
+        
+        connection.commit()
+        print(f"已插入 {len(categories) + sum(len(subcats) for subcats in subcategories.values())} 个产品类别")
+    
+    # 获取所有类别ID
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT category_id, category_name, category_level FROM product_categories")
+        all_categories = cursor.fetchall()
+        level2_categories = [cat for cat in all_categories if cat['category_level'] == 2]
+    
+    # 生成产品数据
+    products = []
+    for _ in range(200 + random.randint(0, 100)):
+        category = random.choice(level2_categories)
+        price = round(random.uniform(49.9, 999.9), 2)
+        cost = round(price * random.uniform(0.4, 0.7), 2)
+        
+        product = {
+            "product_name": fake.word() + fake.word() + random.choice(["", "系列", "款", "新品"]),
+            "category_id": category['category_id'],
+            "price": price,
+            "cost": cost,
+            "description": fake.paragraph()
+        }
+        products.append(product)
+    
+    with connection.cursor() as cursor:
+        for product in products:
+            cursor.execute(
+                "INSERT INTO products (product_name, category_id, price, cost, description) VALUES (%s, %s, %s, %s, %s)",
+                (product["product_name"], product["category_id"], product["price"], product["cost"], product["description"])
+            )
+        
+        connection.commit()
+        print(f"已插入 {len(products)} 个产品")
+    
+    # 生成用户数据
+    users = []
+    user_sources = ["直接访问", "搜索引擎", "社交媒体", "广告", "推荐"]
+    
+    for _ in range(3000):
+        registration_date = fake.date_between(start_date="-3y", end_date="today")
+        last_login_date = fake.date_between(start_date=registration_date, end_date="today") if random.random() > 0.1 else None
+        
+        user = {
+            "username": fake.user_name(),
+            "email": fake.email(),
+            "registration_date": registration_date,
+            "last_login_date": last_login_date,
+            "user_source": random.choice(user_sources)
+        }
+        users.append(user)
+    
+    with connection.cursor() as cursor:
+        for user in users:
+            cursor.execute(
+                "INSERT INTO users (username, email, registration_date, last_login_date, user_source) VALUES (%s, %s, %s, %s, %s)",
+                (user["username"], user["email"], user["registration_date"], user["last_login_date"], user["user_source"])
+            )
+        
+        connection.commit()
+        print(f"已插入 {len(users)} 个用户")
+    
+    # 生成营销活动数据
+    campaigns = []
+    campaign_names = ["春节大促", "618购物节", "双11狂欢", "双12年终盛典", "新年特惠", "情人节专场", "暑期大促", "开学季"]
+    
+    start_date = datetime.now() - timedelta(days=365*2)
+    for name in campaign_names:
+        end_date = start_date + timedelta(days=random.randint(7, 14))
+        budget = round(random.uniform(10000, 50000), 2)
+        
+        campaign = {
+            "campaign_name": name,
+            "start_date": start_date,
+            "end_date": end_date,
+            "budget": budget
+        }
+        campaigns.append(campaign)
+        
+        # 下一个活动的开始日期
+        start_date = end_date + timedelta(days=random.randint(30, 60))
+    
+    with connection.cursor() as cursor:
+        for campaign in campaigns:
+            cursor.execute(
+                "INSERT INTO marketing_campaigns (campaign_name, start_date, end_date, budget) VALUES (%s, %s, %s, %s)",
+                (campaign["campaign_name"], campaign["start_date"], campaign["end_date"], campaign["budget"])
+            )
+        
+        connection.commit()
+        print(f"已插入 {len(campaigns)} 个营销活动")
+    
+    # 生成流量来源数据
+    traffic_sources = [
+        {"name": "百度", "type": "搜索引擎"},
+        {"name": "Google", "type": "搜索引擎"},
+        {"name": "微信", "type": "社交媒体"},
+        {"name": "微博", "type": "社交媒体"},
+        {"name": "抖音", "type": "社交媒体"},
+        {"name": "小红书", "type": "社交媒体"},
+        {"name": "直接访问", "type": "直接"},
+        {"name": "电子邮件", "type": "营销"},
+        {"name": "联盟广告", "type": "广告"},
+        {"name": "信息流广告", "type": "广告"},
+        {"name": "朋友推荐", "type": "推荐"},
+        {"name": "App", "type": "应用"},
+        {"name": "其他", "type": "其他"},
+        {"name": "天猫", "type": "电商平台"},
+        {"name": "京东", "type": "电商平台"}
+    ]
+    
+    with connection.cursor() as cursor:
+        for source in traffic_sources:
+            cursor.execute(
+                "INSERT INTO traffic_sources (source_name, source_type) VALUES (%s, %s)",
+                (source["name"], source["type"])
+            )
+        
+        connection.commit()
+        print(f"已插入 {len(traffic_sources)} 个流量来源")
+    
+    # 获取所有用户ID
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT user_id FROM users")
+        user_ids = [row['user_id'] for row in cursor.fetchall()]
+    
+    # 获取所有产品ID和价格
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT product_id, price FROM products")
+        product_data = cursor.fetchall()
+        product_ids = [row['product_id'] for row in product_data]
+        product_prices = {row['product_id']: row['price'] for row in product_data}
+    
+    # 获取所有营销活动ID
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT campaign_id, start_date, end_date FROM marketing_campaigns")
+        campaign_data = cursor.fetchall()
+    
+    # 获取所有流量来源ID
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT source_id, source_name FROM traffic_sources")
+        source_data = cursor.fetchall()
+        source_ids = [row['source_id'] for row in source_data]
+        source_names = {row['source_id']: row['source_name'] for row in source_data}
+    
+    # 生成订单和订单明细数据
+    order_sources = ["PC网站", "移动网站", "iOS App", "Android App", "微信小程序", "天猫", "京东"]
+    payment_methods = ["支付宝", "微信支付", "银行卡", "货到付款", "花呗", "京东白条"]
+    order_statuses = ["已完成", "已取消", "已退款", "处理中"]
+    
+    # 按月生成订单，确保数据分布合理
+    start_date = datetime.now() - timedelta(days=365*2)
+    end_date = datetime.now()
+    current_date = start_date
+    
+    orders = []
+    order_items = []
+    
+    # 获取活动日期范围
+    campaign_periods = []
+    for campaign in campaign_data:
+        campaign_periods.append({
+            'campaign_id': campaign['campaign_id'],
+            'start_date': campaign['start_date'],
+            'end_date': campaign['end_date']
+        })
+    
+    while current_date <= end_date:
+        # 每月订单数量，随机波动
+        month_orders_count = random.randint(800, 1200)
+        
+        # 判断是否在活动期间，如果是则增加订单量
+        in_campaign = False
+        campaign_id = None
+        for period in campaign_periods:
+            if period['start_date'] <= current_date.date() <= period['end_date']:
+                in_campaign = True
+                campaign_id = period['campaign_id']
+                # 活动期间订单量提升
+                month_orders_count = int(month_orders_count * random.uniform(1.5, 2.5))
+                break
+        
+        # 生成当月订单
+        for _ in range(month_orders_count):
+            user_id = random.choice(user_ids)
+            order_date = fake.date_time_between(
+                start_date=current_date,
+                end_date=current_date + timedelta(days=30)
+            )
+            
+            # 如果在活动期间，大部分订单关联到活动
+            if in_campaign and random.random() < 0.8:
+                order_campaign_id = campaign_id
+            else:
+                order_campaign_id = None
+            
+            # 订单来源，如果在活动期间，更可能来自特定渠道
+            if in_campaign:
+                order_source = random.choices(
+                    order_sources,
+                    weights=[0.15, 0.25, 0.2, 0.2, 0.1, 0.05, 0.05],
+                    k=1
+                )[0]
+            else:
+                order_source = random.choice(order_sources)
+            
+            # 创建订单
+            order = {
+                "user_id": user_id,
+                "order_date": order_date,
+                "order_status": random.choices(
+                    order_statuses,
+                    weights=[0.85, 0.08, 0.05, 0.02],
+                    k=1
+                )[0],
+                "payment_method": random.choice(payment_methods),
+                "order_source": order_source,
+                "campaign_id": order_campaign_id,
+                "total_amount": 0  # 将在添加订单项后更新
+            }
+            
+            # 为订单添加1-5个商品
+            items_count = random.choices([1, 2, 3, 4, 5], weights=[0.3, 0.3, 0.2, 0.15, 0.05], k=1)[0]
+            order_total = decimal.Decimal('0.00')
+            
+            order_items_list = []
+            selected_products = random.sample(product_ids, items_count)
+            
+            for product_id in selected_products:
+                price = product_prices[product_id]
+                quantity = random.choices([1, 2, 3], weights=[0.7, 0.2, 0.1], k=1)[0]
+                
+                # 如果在活动期间，可能有折扣
+                if in_campaign and random.random() < 0.7:
+                    discount = decimal.Decimal(str(round(price * random.uniform(0.05, 0.3), 2)))
+                else:
+                    discount = decimal.Decimal('0.00')
+                
+                item_total = (price - discount) * quantity
+                order_total += item_total
+                
+                order_items_list.append({
+                    "product_id": product_id,
+                    "quantity": quantity,
+                    "price": price,
+                    "discount": discount
+                })
+            
+            order["total_amount"] = order_total
+            orders.append((order, order_items_list))
+        
+        # 移动到下个月
+        current_date += timedelta(days=30)
+    
+    # 批量插入订单和订单明细
+    with connection.cursor() as cursor:
+        for order, items in orders:
+            # 插入订单
+            cursor.execute(
+                """
+                INSERT INTO orders 
+                (user_id, order_date, order_status, payment_method, order_source, campaign_id, total_amount) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    order["user_id"], 
+                    order["order_date"], 
+                    order["order_status"], 
+                    order["payment_method"], 
+                    order["order_source"], 
+                    order["campaign_id"], 
+                    order["total_amount"]
+                )
+            )
+            
+            order_id = cursor.lastrowid
+            
+            # 插入订单明细
+            for item in items:
+                cursor.execute(
+                    """
+                    INSERT INTO order_items 
+                    (order_id, product_id, quantity, price, discount) 
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        order_id, 
+                        item["product_id"], 
+                        item["quantity"], 
+                        item["price"], 
+                        item["discount"]
+                    )
+                )
+            
+            # 每1000个订单提交一次，避免事务过大
+            if order_id % 1000 == 0:
+                connection.commit()
+        
+        # 最后提交剩余事务
+        connection.commit()
+        print(f"已插入 {len(orders)} 个订单和相关订单明细")
+    
+    # 生成用户行为数据
+    behavior_types = ["浏览", "加入购物车", "收藏", "购买", "评价"]
+    
+    # 获取所有订单信息，用于生成购买行为
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT o.order_id, o.user_id, oi.product_id, o.order_date 
+            FROM orders o 
+            JOIN order_items oi ON o.order_id = oi.order_id
+            WHERE o.order_status = '已完成'
+        """)
+        purchase_data = cursor.fetchall()
+    
+    # 为每个用户生成浏览、加入购物车、收藏行为
+    behaviors = []
+    
+    # 首先添加所有购买行为
+    for purchase in purchase_data:
+        behavior = {
+            "user_id": purchase["user_id"],
+            "product_id": purchase["product_id"],
+            "behavior_type": "购买",
+            "behavior_date": purchase["order_date"],
+            "source_id": random.choice(source_ids)
+        }
+        behaviors.append(behavior)
+    
+    # 然后为每个用户添加其他行为
+    for user_id in user_ids:
+        # 每个用户生成10-50个行为
+        behavior_count = random.randint(10, 50)
+        
+        for _ in range(behavior_count):
+            product_id = random.choice(product_ids)
+            behavior_type = random.choices(
+                behavior_types[:3],  # 只选择浏览、加入购物车、收藏
+                weights=[0.7, 0.2, 0.1],
+                k=1
+            )[0]
+            
+            behavior_date = fake.date_time_between(start_date="-2y", end_date="now")
+            
+            behavior = {
+                "user_id": user_id,
+                "product_id": product_id,
+                "behavior_type": behavior_type,
+                "behavior_date": behavior_date,
+                "source_id": random.choice(source_ids)
+            }
+            behaviors.append(behavior)
+    
+    # 添加评价行为（基于购买）
+    for purchase in purchase_data:
+        # 只有部分购买会有评价
+        if random.random() < 0.3:
+            # 评价通常在购买后1-14天
+            days_after = random.randint(1, 14)
+            review_date = purchase["order_date"] + timedelta(days=days_after)
+            
+            behavior = {
+                "user_id": purchase["user_id"],
+                "product_id": purchase["product_id"],
+                "behavior_type": "评价",
+                "behavior_date": review_date,
+                "source_id": None  # 评价没有来源
+            }
+            behaviors.append(behavior)
+    
+    # 批量插入用户行为
+    with connection.cursor() as cursor:
+        for i, behavior in enumerate(behaviors):
+            cursor.execute(
+                """
+                INSERT INTO user_behaviors 
+                (user_id, product_id, behavior_type, behavior_date, source_id) 
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    behavior["user_id"],
+                    behavior["product_id"],
+                    behavior["behavior_type"],
+                    behavior["behavior_date"],
+                    behavior["source_id"]
+                )
+            )
+            
+            # 每10000条提交一次
+            if (i + 1) % 10000 == 0:
+                connection.commit()
+                print(f"已插入 {i + 1}/{len(behaviors)} 条用户行为数据")
+        
+        # 提交剩余事务
+        connection.commit()
+        print(f"已插入 {len(behaviors)} 条用户行为数据")
+    
+    print("数据生成完成！")
 
-if __name__ == "__main__":
-    main()
+except Exception as e:
+    print(f"发生错误: {e}")
+finally:
+    if connection:
+        connection.close()
+        print("数据库连接已关闭")
