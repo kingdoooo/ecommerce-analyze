@@ -209,7 +209,7 @@ sudo yum install -y gcc-c++ make
 3. 克隆代码仓库:
 
 ```bash
-git clone https://github.com/your-username/eCommerceAnalyze.git
+git clone https://github.com/kingdoooo/ecommerce-analyze.git
 cd eCommerceAnalyze
 ```
 
@@ -343,7 +343,7 @@ curl -sL https://rpm.nodesource.com/setup_18.x | bash -
 yum install -y nodejs git gcc-c++ make
 
 # 克隆代码仓库
-git clone https://github.com/your-username/eCommerceAnalyze.git /home/ec2-user/eCommerceAnalyze
+git clone https://github.com/kingdoooo/ecommerce-analyze.git /home/ec2-user/eCommerceAnalyze
 cd /home/ec2-user/eCommerceAnalyze
 
 # 设置环境变量

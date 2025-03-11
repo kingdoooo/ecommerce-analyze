@@ -182,6 +182,6 @@ npm start
 
 ## 联系方式
 
-项目维护者 - [@your-username](https://github.com/your-username)
+项目维护者 - [@kingdoooo](https://github.com/kingdoooo)
 
-项目链接: [https://github.com/your-username/eCommerceAnalyze](https://github.com/your-username/eCommerceAnalyze)
+项目链接: [https://github.com/kingdoooo/ecommerce-analyze](https://github.com/kingdoooo/ecommerce-analyze)
