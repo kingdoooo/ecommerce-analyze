@@ -27,9 +27,10 @@ import {
   Typography,
   CircularProgress,
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+// These imports were causing errors and are not used in the component
+// import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+// import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+// import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { format, subMonths } from 'date-fns';
 import { createAnalysis, setStreamData, selectStreamData } from '../redux/slices/analysisSlice';
 import dataService from '../services/dataService';
@@ -57,6 +58,14 @@ const AnalysisPage = () => {
   const [error, setError] = useState(null);
   const [streamActive, setStreamActive] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
+  
+  // Create a local copy of streamData with defaults if it's undefined
+  const safeStreamData = streamData || { 
+    thinking: false, 
+    thinkingCollapsed: false, 
+    progress: 0, 
+    messages: [] 
+  };
 
   // Initial form values
   const initialValues = {
@@ -444,18 +453,18 @@ const AnalysisPage = () => {
         {(streamActive || analysisResult) && (
           <Grid item xs={12} md={6}>
             {/* Thinking Process */}
-            {streamData.thinking && (
+            {safeStreamData.thinking && (
               <Paper sx={{ p: 3, mb: 3 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6">分析思考过程</Typography>
                 </Box>
                 <LinearProgress 
                   variant="determinate" 
-                  value={streamData.progress} 
+                  value={safeStreamData.progress} 
                   sx={{ mb: 2 }}
                 />
                 <Box sx={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  {streamData.messages.map((message, index) => (
+                  {safeStreamData.messages.map((message, index) => (
                     <Typography key={index} variant="body2" gutterBottom>
                       {message}
                     </Typography>
@@ -465,7 +474,7 @@ const AnalysisPage = () => {
             )}
             
             {/* Collapsed Thinking */}
-            {!streamData.thinking && streamData.thinkingCollapsed && streamData.messages.length > 0 && (
+            {!safeStreamData.thinking && safeStreamData.thinkingCollapsed && safeStreamData.messages.length > 0 && (
               <Button 
                 variant="outlined" 
                 onClick={handleToggleThinking}
