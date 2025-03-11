@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
+const path = require('path');
 const { BedrockRuntimeClient, InvokeModelCommand } = require('@aws-sdk/client-bedrock-runtime');
 const mysql = require('mysql2/promise');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -29,10 +30,18 @@ const pool = mysql.createPool({
   connectionLimit: 10
 });
 
+// 静态文件服务
+app.use(express.static(path.join(__dirname, 'public')));
+
 // 路由
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/analysis', require('./routes/analysis'));
 app.use('/api/data', require('./routes/data'));
+
+// SPA 前端路由处理 - 所有非API路由都返回index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
@@ -41,7 +50,7 @@ app.use((err, req, res, next) => {
 });
 
 // 启动服务器
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
