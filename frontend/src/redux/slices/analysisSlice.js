@@ -9,6 +9,7 @@ const initialState = {
     thinkingCollapsed: false,
     progress: 0,
     messages: [],
+    hasReasoningContent: false,
   },
   status: 'idle', // 'idle' | 'loading' | 'succeeded' | 'failed'
   error: null,
@@ -62,12 +63,48 @@ const analysisSlice = createSlice({
           state.streamData.thinkingCollapsed = false;
           state.streamData.progress = 0;
           state.streamData.messages = [];
+          state.streamData.hasReasoningContent = false;
           break;
           
         case 'thinking_progress':
           state.streamData.progress = action.payload.progress;
           if (action.payload.message) {
-            state.streamData.messages.push(action.payload.message);
+            // 标记是否为reasoning内容
+            const isReasoning = action.payload.isReasoning || false;
+            
+            // 如果是reasoning内容，设置hasReasoningContent标志
+            if (isReasoning) {
+              state.streamData.hasReasoningContent = true;
+            }
+            
+            // 检查消息是否包含换行符
+            if (action.payload.message.includes('\n')) {
+              // 如果包含换行符，按换行符分割
+              const lines = action.payload.message.split('\n');
+              
+              // 处理第一行 - 追加到最后一条消息（如果有的话）
+              if (lines[0].trim() && state.streamData.messages.length > 0) {
+                state.streamData.messages[state.streamData.messages.length - 1] += lines[0];
+              } else if (lines[0].trim()) {
+                state.streamData.messages.push(lines[0]);
+              }
+              
+              // 处理剩余行 - 添加为新消息
+              for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                  state.streamData.messages.push(lines[i]);
+                }
+              }
+            } else {
+              // 如果没有换行符，检查是否有现有消息
+              if (state.streamData.messages.length > 0) {
+                // 将新消息附加到最后一条消息
+                state.streamData.messages[state.streamData.messages.length - 1] += action.payload.message;
+              } else {
+                // 如果没有现有消息，创建一个新消息
+                state.streamData.messages.push(action.payload.message);
+              }
+            }
           }
           break;
           
@@ -91,6 +128,7 @@ const analysisSlice = createSlice({
         thinkingCollapsed: false,
         progress: 0,
         messages: [],
+        hasReasoningContent: false,
       };
     },
     clearError: (state) => {

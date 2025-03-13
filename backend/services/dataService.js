@@ -121,6 +121,28 @@ class DataService {
       connection.release();
     }
   }
+  
+  /**
+   * 获取AI模型配置
+   * 从环境变量中获取可用的AI模型配置
+   */
+  getModelConfig() {
+    return {
+      models: [
+        {
+          id: config.DEFAULT_MODEL_ID,
+          name: 'Claude 3.7 Sonnet',
+          description: '默认模型，适合大多数分析任务'
+        },
+        {
+          id: config.ALTERNATIVE_MODEL_ID,
+          name: 'DeepSeek R1',
+          description: '替代模型，适合特定场景'
+        }
+      ],
+      defaultModelId: config.DEFAULT_MODEL_ID
+    };
+  }
 }
 
 module.exports = new DataService();

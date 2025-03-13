@@ -16,13 +16,24 @@ class AuthService {
   }
 
   async login(username, password) {
+    console.log('Login attempt for user:', username);
+    console.log('Database config:', {
+      host: config.DB_HOST,
+      user: config.DB_USER,
+      database: config.DB_NAME
+    });
+
     const connection = await this.pool.getConnection();
     try {
+      console.log('Database connection successful');
+
       // 查找用户
       const [users] = await connection.execute(
         'SELECT id, username, password_hash, role, full_name FROM platform_users WHERE username = ? AND is_active = true',
         [username]
       );
+
+      console.log('Query result:', users.length > 0 ? 'User found' : 'User not found');
 
       if (users.length === 0) {
         throw new Error('Invalid username or password');
@@ -31,7 +42,9 @@ class AuthService {
       const user = users[0];
 
       // 验证密码
+      console.log('Comparing password hash');
       const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+      console.log('Comparing password hash');
       if (!isPasswordValid) {
         throw new Error('Invalid username or password');
       }

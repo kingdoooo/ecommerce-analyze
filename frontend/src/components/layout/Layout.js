@@ -41,15 +41,17 @@ const Layout = () => {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
+          width: '100%',
+          marginLeft: 0, // 移除左侧边距，让内容居中
+          height: '100vh', // 设置高度为100vh
+          overflow: 'auto', // 添加滚动条
           transition: (theme) => theme.transitions.create(['margin', 'width'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
           ...(sidebarOpen && {
-            width: `calc(100% - ${drawerWidth}px)`,
-            marginLeft: `${drawerWidth}px`,
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            // 不添加左侧边距，让内容在展示区域居中
             transition: (theme) => theme.transitions.create(['margin', 'width'], {
               easing: theme.transitions.easing.easeOut,
               duration: theme.transitions.duration.enteringScreen,

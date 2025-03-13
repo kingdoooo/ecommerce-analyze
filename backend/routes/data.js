@@ -43,6 +43,16 @@ router.get('/metrics', async (req, res, next) => {
   }
 });
 
+// 获取AI模型配置
+router.get('/model-config', async (req, res, next) => {
+  try {
+    const modelConfig = dataService.getModelConfig();
+    res.json(modelConfig);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 获取营销活动
 router.get('/campaigns', async (req, res, next) => {
   try {

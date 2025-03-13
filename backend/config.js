@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 module.exports = {
   // 数据库配置
@@ -11,7 +12,7 @@ module.exports = {
   AWS_REGION: process.env.AWS_REGION || 'us-west-2',
   
   // Bedrock模型配置
-  DEFAULT_MODEL_ID: process.env.DEFAULT_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0',
+  DEFAULT_MODEL_ID: process.env.DEFAULT_MODEL_ID || 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
   ALTERNATIVE_MODEL_ID: process.env.ALTERNATIVE_MODEL_ID || 'deepseek.r1-v1:0',
   
   // JWT配置

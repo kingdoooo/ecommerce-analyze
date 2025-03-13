@@ -3,16 +3,20 @@ const config = require('../config');
 
 // JWT认证中间件
 const authenticateJWT = (req, res, next) => {
+  // 尝试从Authorization头获取令牌
   const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Authorization header is missing' });
+  
+  // 如果头部不存在，检查查询参数
+  let token = null;
+  if (authHeader) {
+    token = authHeader.split(' ')[1];
+  } else if (req.query.token) {
+    // 支持从查询参数中获取令牌
+    token = req.query.token;
   }
-
-  const token = authHeader.split(' ')[1];
-
+  
   if (!token) {
-    return res.status(401).json({ error: 'Token is missing' });
+    return res.status(401).json({ error: 'Authentication token is missing' });
   }
 
   try {
